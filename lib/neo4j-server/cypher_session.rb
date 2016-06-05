@@ -38,6 +38,19 @@ module Neo4j
         conn
       end
 
+
+      def self.set_write_header(connection, request_body = nil)
+        if request_body.nil?
+          connection.headers.delete('X-Neo4j-Query-Write')
+        else
+          if /(CREATE|MERGE|SET|DELETE|REMOVE)/.match(request_body.to_s).nil?
+            connection.headers.delete('X-Neo4j-Query-Write')
+          else
+            connection.headers['X-Neo4j-Query-Write'] = '1'
+          end
+        end
+      end
+      
       # Opens a session to the database
       # @see Neo4j::Session#open
       #
@@ -47,6 +60,7 @@ module Neo4j
         extract_basic_auth(endpoint_url, params)
         url = endpoint_url || 'http://localhost:7474'
         connection = params[:connection] || create_connection(params, url)
+        Neo4j::Server::CypherSession.set_write_header(connection)
         response = connection.get(url)
         fail "Server not available on #{url} (response code #{response.status})" unless response.status == 200
         establish_session(response.body, connection)
@@ -82,6 +96,7 @@ module Neo4j
       end
 
       def initialize_resource(data_url)
+        Neo4j::Server::CypherSession.set_write_header(@connection)
         response = @connection.get(data_url)
         expect_response_code!(response, 200)
         data_resource = response.body
@@ -136,6 +151,7 @@ module Neo4j
       end
 
       def schema_properties(query_string)
+        Neo4j::Server::CypherSession.set_write_header(@connection)
         response = @connection.get(query_string)
         expect_response_code!(response, 200)
         {property_keys: response.body.map! { |row| row[:property_keys].map(&:to_sym) }}
@@ -214,6 +230,7 @@ module Neo4j
             curr_tx._query(query, params)
           else
             query = params.nil? ? {'query' => query} : {'query' => query, 'params' => params}
+            Neo4j::Server::CypherSession.set_write_header(@connection, query)
             response = @connection.post(resource_url(:cypher), query)
             CypherResponse.create_with_no_tx(response)
           end
