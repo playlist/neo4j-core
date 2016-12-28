@@ -113,8 +113,12 @@ module Neo4j
             def request(method, path, body = '', _options = {})
               request_body = request_body(body)
               url = url_from_path(path)
+              headers = REQUEST_HEADERS.dup
+              unless /(CREATE|MERGE|SET|DELETE|REMOVE)/.match(request_body.to_s).nil?
+                headers['X-Neo4j-Query-Write'.to_sym] = '1'
+              end
               @instrument_proc.call(method, url, request_body) do
-                @faraday.run_request(method, url, request_body, REQUEST_HEADERS) do |req|
+                @faraday.run_request(method, url, request_body, headers) do |req|
                   # Temporary
                   # req.options.timeout = 5
                   # req.options.open_timeout = 5
